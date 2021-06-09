@@ -8,15 +8,22 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"code.sajari.com/docconv"
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/ledongthuc/pdf"
+	//"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	//"github.com/gorilla/mux"
 	"github.com/streadway/amqp"
@@ -54,6 +61,15 @@ var sentimentsLog sentimentsLogList
 
 type brokerMessage struct{
 	DocumentName string `json:DocumentName`
+}
+
+type mongoDocument struct{
+
+	fileID    string `bson:"fileID"`
+	sentiment string `bson:"sentiment"`
+	offensive int 	 `bson:"offensive"`
+	employees string `bson:"employees"`
+
 }
 
 // Functions definitions
@@ -214,6 +230,124 @@ func getContentDocx(fileNameComplete string) string {
 	return content.Body
 }
 
+//Azure Blob storage functions
+
+
+func handleErrors(err error) {
+	if err != nil {
+		if serr, ok := err.(azblob.StorageError); ok { // This error is a Service-specific
+			switch serr.ServiceCode() { // Compare serviceCode to ServiceCodeXxx constants
+			case azblob.ServiceCodeContainerAlreadyExists:
+				fmt.Println("Received 409. Container already exists")
+				return
+			}
+		}
+		log.Fatal(err)
+	}
+}
+
+func getFileFromAzureBlob(fileName string){
+
+	accountName := "documentanalyzer2"
+	accountKey  := "35oiYj9BMx99zwV+Wk4nAlnIUlTWLOENmnfGYp7Gij/QrTc4lXjTEPYjdEZsK49HUmVceLSdEiDcWl8sEJoEyA=="
+
+	// Create a default request pipeline using your storage account name and account key.
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	if err != nil {
+		log.Fatal("Invalid credentials with error: " + err.Error())
+	}
+	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
+
+	// Create a random string for the quick start container
+	containerName := "documents"
+
+	// From the Azure portal, get your storage account blob service URL endpoint.
+	URL, _ := url.Parse(
+		fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, containerName))
+
+	// Create a ContainerURL object that wraps the container URL and a request
+	// pipeline to make requests.
+	containerURL := azblob.NewContainerURL(*URL, p)
+
+	// Create the container
+	fmt.Printf("Creating a container named %s\n", containerName)
+	ctx := context.Background() // This example uses a never-expiring context
+	_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
+	handleErrors(err)
+
+
+	// List the container that we have created above
+	fmt.Println("Listing the blobs in the container:")
+	for marker := (azblob.Marker{}); marker.NotDone(); {
+		// Get a result segment starting with the blob indicated by the current Marker.
+		listBlob, err := containerURL.ListBlobsFlatSegment(ctx, marker, azblob.ListBlobsSegmentOptions{})
+		handleErrors(err)
+
+		// ListBlobs returns the start of the next segment; you MUST use this to get
+		// the next segment (after processing the current result segment).
+		marker = listBlob.NextMarker
+
+		// Process the blobs returned in this result segment (if the segment is empty, the loop body won't execute)
+		for _, blobInfo := range listBlob.Segment.BlobItems {
+			fmt.Print("	Blob name: " + blobInfo.Name + "\n")
+		}
+	}
+
+	// Here's how to download the blob
+	blobURL := containerURL.NewBlockBlobURL(fileName)
+	downloadResponse, err := blobURL.Download(ctx, 0, azblob.CountToEnd, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
+	if err != nil{
+		log.Fatal(err)
+	}
+
+	// NOTE: automatically retries are performed if the connection fails
+	bodyStream := downloadResponse.Body(azblob.RetryReaderOptions{MaxRetryRequests: 20})
+
+	// read the body into a buffer
+	downloadedData := bytes.Buffer{}
+	_, err = downloadedData.ReadFrom(bodyStream)
+	handleErrors(err)
+
+	// The downloaded blob data is in downloadData's buffer. :Let's print it
+	fmt.Printf("Downloaded the blob: " + downloadedData.String())
+
+	// Cleaning up the quick start by deleting the container and the file created locally
+	fmt.Printf("Cleaning up.\n")
+	containerURL.Delete(ctx, azblob.ContainerAccessConditions{})
+
+
+}
+
+//MongoDB Conection function
+
+func sendDataToMongoDB(newInsertion mongoDocument){
+
+	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://devroot:devroot@mongo:27017"))
+    if err != nil {
+        log.Fatal(err)
+    }
+    ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+    err = client.Connect(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Disconnect(ctx)
+
+    quickstartDatabase := client.Database("DBdocs")
+    documentsCollection := quickstartDatabase.Collection("documents")
+
+	sentimentResult, err := documentsCollection.InsertOne(ctx, newInsertion)
+
+	if err != nil {
+    	panic(err)
+	}
+	fmt.Println(sentimentResult.InsertedID)
+
+
+}
+
+
+
 // RabbitMQ Functions
 
 func failOnError(err error, msg string) {
@@ -284,7 +418,7 @@ func brokerListening(){
 			}
 	}()
 
-	log.Printf(" [*] Waiting for logs. To exit press CTRL+C")
+	log.Printf(" Waiting for messages from the broker. To exit press CTRL+C")
 	<-forever
 
 }
