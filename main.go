@@ -15,28 +15,30 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	"code.sajari.com/docconv"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/ledongthuc/pdf"
-	//"go.mongodb.org/mongo-driver/bson"
+
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	//"github.com/gorilla/mux"
+
 	"github.com/streadway/amqp"
+
 )
 
 //Structure types for holding data in execution time
 
-type document struct {
+type documentS struct {
 	Name    string `json:Name`
 	Content string `json:Content`
 }
 
-type documentList []document
+type documentList []documentS
 
 var documentBank documentList
 
@@ -89,7 +91,7 @@ func getDocuments(w http.ResponseWriter, r *http.Request) {
 
 func addDocument(w http.ResponseWriter, r *http.Request) {
 
-	var newDocument document
+	var newDocument documentS
 	reqBody, err := ioutil.ReadAll(r.Body)
 
 	if err != nil {
@@ -105,7 +107,7 @@ func addDocument(w http.ResponseWriter, r *http.Request) {
 	getSentiment(newDocument)
 }
 
-func getSentiment(documentReq document) {
+func getSentiment(documentReq documentS) {
 
 	var result analysisResult
 	var sentimentLog resultSentimentLog
@@ -138,6 +140,15 @@ func getSentiment(documentReq document) {
 	sentimentsLog = append(sentimentsLog, sentimentLog)
 	fmt.Println("Analysis Finished")
 	fmt.Printf("%+v",sentimentsLog)
+	//Mongo DB Update
+	/*
+	var newInsertion mongoDocument
+	newInsertion.fileID = documentReq.Name
+	newInsertion.sentiment = result.Result.Type
+	newInsertion.offensive = 0
+	newInsertion.employees = ""
+	sendDataToMongoDB(newInsertion)
+	*/
 
 }
 
@@ -149,31 +160,30 @@ func getSentimentsLog(w http.ResponseWriter, r *http.Request) {
 
 func getTextFromFile(fileNameComplete string) {
 
-	var newDocument document
+	var newDocument documentS
 	var content string
 	stringSplited := strings.Split(fileNameComplete, ".")
-	fileName := stringSplited[0]
 	fileExtension := stringSplited[1]
 
 	if fileExtension == "txt" {
 
 		content = getContentTxt("testDocuments/" + fileNameComplete)
 		newDocument.Content = content
-		newDocument.Name = fileName
+		newDocument.Name = fileNameComplete
 		getSentiment(newDocument)
 
 	} else if fileExtension == "pdf" {
 
 		content = getContentPDF("testDocuments/" + fileNameComplete)
 		newDocument.Content = content
-		newDocument.Name = fileName
+		newDocument.Name = fileNameComplete
 		getSentiment(newDocument)
 
 	} else {
 		
 		content = getContentDocx("testDocuments/" + fileNameComplete)
 		newDocument.Content = content
-		newDocument.Name = fileName
+		newDocument.Name = fileNameComplete
 		getSentiment(newDocument)
 		
 	}
@@ -309,14 +319,91 @@ func getFileFromAzureBlob(fileName string){
 	handleErrors(err)
 
 	// The downloaded blob data is in downloadData's buffer. :Let's print it
-	fmt.Printf("Downloaded the blob: " + downloadedData.String())
-
-	// Cleaning up the quick start by deleting the container and the file created locally
-	fmt.Printf("Cleaning up.\n")
-	containerURL.Delete(ctx, azblob.ContainerAccessConditions{})
+	createFileSystem(fileName,downloadedData.String()) 
+	
 
 
 }
+
+
+func createFileSystem(fileNameComplete string, documentData string){
+
+	stringSplited := strings.Split(fileNameComplete, ".")
+	fileExtension := stringSplited[1]
+
+	if fileExtension == "txt" {
+
+		createTxt(fileNameComplete, documentData)
+		fmt.Printf("Txt created\n")
+
+	} else if fileExtension == "pdf" {
+		createPdf(fileNameComplete,documentData)
+		fmt.Printf("PDF created\n")
+
+	} else {
+		createDocx(fileNameComplete, documentData)
+		fmt.Printf("Docx created\n")
+	}
+
+}
+
+
+func createTxt(fileNameComplete string, documentData string){
+
+	fileTxt, err := os.Create("./testDocuments/" + fileNameComplete)
+
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    defer fileTxt.Close()
+
+    _, err2 := fileTxt.WriteString(documentData)
+
+    if err2 != nil {
+        log.Fatal(err2)
+    }
+
+}
+
+func createPdf(fileNameComplete string, documentData string){
+
+
+	filePDF, err := os.Create("./testDocuments/" + fileNameComplete)
+
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    defer filePDF.Close()
+
+    _, err2 := filePDF.WriteString(documentData)
+
+    if err2 != nil {
+		log.Fatal(err2)
+	}
+}
+
+func createDocx(fileNameComplete string, documentData string){
+
+	
+	fileDOCX, err := os.Create("./testDocuments/" + fileNameComplete)
+
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    defer fileDOCX.Close()
+
+    _, err2 := fileDOCX.WriteString(documentData)
+
+    if err2 != nil {
+		log.Fatal(err2)
+	}
+
+}
+
+
 
 //MongoDB Conection function
 
@@ -412,8 +499,9 @@ func brokerListening(){
 
 	go func() {
 			for d := range msgs {
-					log.Printf(" [x] %s", d.Body)
+					//log.Printf(" [x] %s", d.Body)
 					json.Unmarshal(d.Body, &newBrokerMessage)
+					getFileFromAzureBlob(newBrokerMessage.DocumentName)
 					getTextFromFile(newBrokerMessage.DocumentName)
 			}
 	}()
@@ -426,21 +514,6 @@ func brokerListening(){
 func main() {
 
 	brokerListening()
-	
-	/*
-
-	//In case we need a API sever listening
-
-	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/", indexRoute)
-	router.HandleFunc("/documents", getDocuments).Methods("GET")
-	router.HandleFunc("/documents", addDocument).Methods("POST")
-	router.HandleFunc("/documents/analyzingResults", getSentimentsLog).Methods("GET")
-	log.Fatal(http.ListenAndServe(":3000", router))
-	
-	*/
-	
-
 	
 
 }

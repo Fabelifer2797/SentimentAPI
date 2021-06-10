@@ -1,0 +1,13 @@
+Rabbit mq:
+
+docker run -d --hostname rabbitserver --name rabbitmq-server -p 15672:15672 -p 5672:5672 rabbitmq:3-management
+
+
+Crear la imagen del sentimentAPI de Golang:
+
+docker build -t sentiment-api .
+
+Crear y correr el container del sentimentAPI:
+
+docker run --link rabbitmq-server:rabbitmq-server --name sentimentContainer sentiment-api
+
