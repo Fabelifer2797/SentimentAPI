@@ -23,12 +23,11 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/ledongthuc/pdf"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-
 	"github.com/streadway/amqp"
-
 )
 
 //Structure types for holding data in execution time
@@ -67,10 +66,11 @@ type brokerMessage struct{
 
 type mongoDocument struct{
 
-	fileID    string `bson:"fileID"`
-	sentiment string `bson:"sentiment"`
-	offensive int 	 `bson:"offensive"`
-	employees string `bson:"employees"`
+	ID   primitive.ObjectID `bson:"_id,omitempty"`
+	fileID    string `bson:"fileID,omitempty"`
+	sentiment string `bson:"sentiment,omitempty"`
+	offensive float64 	 `bson:"offensive,omitempty"`
+	employees string `bson:"employees,omitempty"`
 
 }
 
@@ -141,14 +141,14 @@ func getSentiment(documentReq documentS) {
 	fmt.Println("Analysis Finished")
 	fmt.Printf("%+v",sentimentsLog)
 	//Mongo DB Update
-	/*
+	
 	var newInsertion mongoDocument
 	newInsertion.fileID = documentReq.Name
 	newInsertion.sentiment = result.Result.Type
 	newInsertion.offensive = 0
 	newInsertion.employees = ""
 	sendDataToMongoDB(newInsertion)
-	*/
+	
 
 }
 
