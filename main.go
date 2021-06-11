@@ -445,7 +445,7 @@ func failOnError(err error, msg string) {
 
 func brokerListening(){
 
-	var newBrokerMessage brokerMessage
+	
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq-server:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
@@ -500,9 +500,8 @@ func brokerListening(){
 	go func() {
 			for d := range msgs {
 					//log.Printf(" [x] %s", d.Body)
-					json.Unmarshal(d.Body, &newBrokerMessage)
-					getFileFromAzureBlob(newBrokerMessage.DocumentName)
-					getTextFromFile(newBrokerMessage.DocumentName)
+					getFileFromAzureBlob(string(d.Body))
+					getTextFromFile(string(d.Body))
 			}
 	}()
 
