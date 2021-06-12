@@ -67,10 +67,10 @@ type brokerMessage struct{
 type mongoDocument struct{
 
 	ID   primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
-	fileID    string  `json:"fileID,omitempty" bson:"fileID,omitempty"`
-	sentiment string  `json:"sentiment,omitempty" bson:"sentiment,omitempty"`
-	offensive float64 `json:"offensive,omitempty" bson:"offensive,omitempty"`
-	employees string  `json:"employees,omitempty" bson:"employees,omitempty"`
+	FileID    string  `json:"fileID,omitempty" bson:"fileID,omitempty"`
+	Sentiment string  `json:"sentiment,omitempty" bson:"sentiment,omitempty"`
+	Offensive float64 `json:"offensive,omitempty" bson:"offensive,omitempty"`
+	Employees string  `json:"employees,omitempty" bson:"employees,omitempty"`
 
 }
 
@@ -143,10 +143,10 @@ func getSentiment(documentReq documentS) {
 	//Mongo DB Update
 	
 	var newInsertion mongoDocument
-	newInsertion.fileID = documentReq.Name
-	newInsertion.sentiment = result.Result.Type
-	newInsertion.offensive = 0
-	newInsertion.employees = "names"
+	newInsertion.FileID = documentReq.Name
+	newInsertion.Sentiment = result.Result.Type
+	newInsertion.Offensive = 0
+	newInsertion.Employees = "names"
 	sendDataToMongoDB(newInsertion)
 	
 
