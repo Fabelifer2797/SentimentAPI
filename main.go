@@ -23,6 +23,7 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/ledongthuc/pdf"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -423,12 +424,15 @@ func sendDataToMongoDB(newInsertion mongoDocument){
     quickstartDatabase := client.Database("DBdocs")
     documentsCollection := quickstartDatabase.Collection("documents")
 
-	sentimentResult, err := documentsCollection.InsertOne(ctx, newInsertion)
+	sentimentResult, err := documentsCollection.UpdateOne(ctx,bson.M{"fileID": newInsertion.FileID}, 
+	bson.D{
+        {"$set", bson.D{{"sentiment", newInsertion.Sentiment}}},
+    },)
 
 	if err != nil {
     	panic(err)
 	}
-	fmt.Println(sentimentResult.InsertedID)
+	fmt.Println(sentimentResult.ModifiedCount)
 
 
 }
