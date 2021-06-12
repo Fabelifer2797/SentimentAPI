@@ -66,11 +66,11 @@ type brokerMessage struct{
 
 type mongoDocument struct{
 
-	ID   primitive.ObjectID `bson:"_id,omitempty"`
-	fileID    string `bson:"fileID,omitempty"`
-	sentiment string `bson:"sentiment,omitempty"`
-	offensive float64 	 `bson:"offensive,omitempty"`
-	employees string `bson:"employees,omitempty"`
+	ID   primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	fileID    string  `json:"fileID,omitempty" bson:"fileID,omitempty"`
+	sentiment string  `json:"sentiment,omitempty" bson:"sentiment,omitempty"`
+	offensive float64 `json:"offensive,omitempty" bson:"offensive,omitempty"`
+	employees string  `json:"employees,omitempty" bson:"employees,omitempty"`
 
 }
 
