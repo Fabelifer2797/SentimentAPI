@@ -146,7 +146,7 @@ func getSentiment(documentReq documentS) {
 	newInsertion.fileID = documentReq.Name
 	newInsertion.sentiment = result.Result.Type
 	newInsertion.offensive = 0
-	newInsertion.employees = ""
+	newInsertion.employees = "names"
 	sendDataToMongoDB(newInsertion)
 	
 
